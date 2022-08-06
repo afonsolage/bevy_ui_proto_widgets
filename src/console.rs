@@ -1,19 +1,31 @@
 use bevy::{prelude::*, ui::FocusPolicy};
 
-use crate::{input_text::InputText, item_list::ItemList, widget::Widget};
+use crate::{
+    input_text::{InputText, InputTextFocused},
+    item_list::ItemList,
+    widget::Widget,
+};
+
+const CONSOLE_HEIGHT_PERC: f32 = 80.0;
+const CONSOLE_ANIMATION_SPEED: f32 = 250.0;
 
 pub(super) struct ConsolePlugin;
 
 impl Plugin for ConsolePlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Console>().add_system(apply_command);
+        app.register_type::<Console>()
+            .add_system(apply_command)
+            .add_system(console_animation)
+            .add_system(toggle_console);
     }
 }
 
-#[derive(Component)]
 struct ConsoleMeta {
+    entity: Entity,
     command_text: Entity,
     log_items: Entity,
+    direction: i8,
+    visible: bool,
 }
 
 #[derive(Component, Reflect, Default)]
@@ -26,21 +38,15 @@ impl Widget for Console {
         commands: &mut Commands,
         asset_server: &AssetServer,
     ) -> Entity {
-        let root = NodeBundle {
-            style: Style {
-                size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
-                position_type: PositionType::Absolute,
-                justify_content: JustifyContent::Center,
-                ..default()
-            },
-            focus_policy: FocusPolicy::Pass,
-            color: Color::NONE.into(),
-            ..default()
-        };
-
         let panel = NodeBundle {
             style: Style {
-                size: Size::new(Val::Percent(80.0), Val::Percent(80.0)),
+                size: Size::new(Val::Percent(100.0), Val::Percent(CONSOLE_HEIGHT_PERC)),
+                position: UiRect::new(
+                    Val::Undefined,
+                    Val::Undefined,
+                    Val::Percent(-CONSOLE_HEIGHT_PERC),
+                    Val::Undefined,
+                ),
                 align_self: AlignSelf::FlexEnd,
                 border: UiRect::all(Val::Px(2.0)),
                 flex_direction: FlexDirection::Column,
@@ -54,27 +60,46 @@ impl Widget for Console {
         let command_text = InputText::build("command_text", commands, asset_server);
         let log_items = ItemList::build("log_items", commands, asset_server);
 
-        commands
-            .spawn_bundle(root)
-            .with_children(|parent| {
-                parent
-                    .spawn_bundle(panel)
-                    .add_child(command_text)
-                    .add_child(log_items);
-            })
+        let entity = commands
+            .spawn_bundle(panel)
+            .add_child(command_text)
+            .add_child(log_items)
             .insert(Name::new(name))
             .insert(Console::default())
-            .insert(ConsoleMeta {
-                command_text,
-                log_items,
-            })
-            .id()
+            .insert(Visibility { is_visible: false })
+            .id();
+
+        commands.insert_resource(ConsoleMeta {
+            command_text,
+            log_items,
+            direction: 0,
+            visible: false,
+            entity,
+        });
+
+        entity
+    }
+}
+
+fn toggle_console(
+    mut meta: ResMut<ConsoleMeta>,
+    input: Res<Input<KeyCode>>,
+    mut focus_input: ResMut<InputTextFocused>,
+) {
+    if input.just_pressed(KeyCode::Grave) && input.pressed(KeyCode::LControl) {
+        if meta.visible && meta.direction == 0 {
+            meta.direction = -1;
+        } else if meta.visible == false && meta.direction == 0 {
+            meta.direction = 1;
+            info!("Focusing!!!!");
+            focus_input.0 = Some(meta.command_text);
+        }
     }
 }
 
 fn apply_command(
     input: Res<Input<KeyCode>>,
-    q: Query<&ConsoleMeta>,
+    meta: Res<ConsoleMeta>,
     mut q_input_text: Query<&mut InputText>,
     mut q_item_list: Query<&mut ItemList>,
 ) {
@@ -82,17 +107,52 @@ fn apply_command(
         return;
     }
 
-    for meta in &q {
-        let mut input_text = q_input_text
-            .get_mut(meta.command_text)
-            .expect("Every console should have an input text");
+    let mut input_text = q_input_text
+        .get_mut(meta.command_text)
+        .expect("Every console should have an input text");
 
-        let cmd = input_text.take();
+    let cmd = input_text.take();
 
-        let mut item_list = q_item_list
-            .get_mut(meta.log_items)
-            .expect("Every console should have an item list");
+    let mut item_list = q_item_list
+        .get_mut(meta.log_items)
+        .expect("Every console should have an item list");
 
-        item_list.items.push(cmd);
+    item_list.items.push(cmd);
+}
+
+fn console_animation(
+    mut q: Query<(&mut Style, &mut Visibility), With<Console>>,
+    time: Res<Time>,
+    mut meta: ResMut<ConsoleMeta>,
+) {
+    if let Ok((mut style, mut visibility)) = q.get_mut(meta.entity) {
+        if meta.direction == 0 {
+            return;
+        } else {
+            let mut top = match style.position.top {
+                Val::Percent(top) => top,
+                _ => unreachable!(),
+            };
+
+            top += meta.direction as f32 * time.delta_seconds() * CONSOLE_ANIMATION_SPEED;
+
+            if meta.direction == 1 && top >= 0.0 {
+                style.position.top = Val::Percent(0.0);
+                meta.direction = 0;
+                meta.visible = true;
+            } else if meta.direction == -1 && top <= -CONSOLE_HEIGHT_PERC {
+                style.position.top = Val::Percent(-CONSOLE_HEIGHT_PERC);
+                meta.direction = 0;
+                meta.visible = false;
+            } else {
+                style.position.top = Val::Percent(top);
+            }
+
+            if top <= -CONSOLE_HEIGHT_PERC {
+                visibility.is_visible = false;
+            } else if visibility.is_visible == false && top > -CONSOLE_HEIGHT_PERC {
+                visibility.is_visible = true;
+            }
+        }
     }
 }

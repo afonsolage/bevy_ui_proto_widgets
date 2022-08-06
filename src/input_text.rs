@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, time::Duration};
 
 use bevy::{prelude::*, ui::FocusPolicy};
 
@@ -11,6 +11,7 @@ impl Plugin for InputTextPlugin {
         app.register_type::<InputText>()
             .init_resource::<InputTextFocused>()
             .add_system(remove_focus_when_hidden)
+            .add_system(hide_caret_when_hidden)
             .add_system(set_focus_when_clicked)
             .add_system(update_text_node)
             .add_system(update_text_modifiers)
@@ -150,6 +151,19 @@ fn remove_focus_when_hidden(
     }
 }
 
+fn hide_caret_when_hidden(
+    mut q: Query<(&InputTextMeta, &Visibility), (With<InputText>, Changed<Visibility>)>,
+    mut q_caret: Query<&mut Style, With<InputTextDisplayCaret>>,
+) {
+    for (meta, visibility) in &mut q {
+        if let Ok(mut style) = q_caret.get_mut(meta.caret_entity) {
+            if visibility.is_visible == false && &style.display == &Display::Flex {
+                style.display = Display::None;
+            }
+        }
+    }
+}
+
 fn update_text_node(
     q: Query<(&InputText, &InputTextMeta), Changed<InputText>>,
     mut q_child: Query<&mut Text, With<InputTextDisplayText>>,
@@ -181,13 +195,25 @@ fn update_text_modifiers(
     mut q: Query<&mut InputText>,
     input_keycode: Res<Input<KeyCode>>,
     focused: ResMut<InputTextFocused>,
+    mut timer: Local<Timer>,
+    time: Res<Time>,
 ) {
     if let Some(e) = focused.0 {
         if let Ok(mut input_text) = q.get_mut(e) {
-            for keycode in input_keycode.get_just_released() {
-                if keycode == &KeyCode::Back {
-                    input_text.text.pop();
-                }
+            timer.tick(time.delta());
+
+            let backspace = if input_keycode.pressed(KeyCode::Back) && timer.finished() {
+                timer.set_duration(Duration::from_millis(100));
+                timer.reset();
+                true
+            } else if input_keycode.just_pressed(KeyCode::Back) {
+                true
+            } else {
+                false
+            };
+
+            if backspace {
+                input_text.text.pop();
             }
         }
     }
