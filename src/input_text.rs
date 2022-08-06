@@ -1,14 +1,8 @@
+use std::borrow::Cow;
+
 use bevy::{prelude::*, ui::FocusPolicy};
-use bevy_inspector_egui::{
-    egui::TextBuffer, widgets::InspectorQuery, Inspectable, InspectorPlugin,
-};
 
 use crate::widget::Widget;
-
-#[derive(Inspectable, Default)]
-struct InputTextInteraction {
-    query: InspectorQuery<Entity, (With<Interaction>, With<InputText>)>,
-}
 
 pub(super) struct InputTextPlugin;
 
@@ -16,7 +10,6 @@ impl Plugin for InputTextPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<InputText>()
             .init_resource::<InputTextFocused>()
-            .add_plugin(InspectorPlugin::<InputTextInteraction>::new())
             .add_system(remove_focus_when_hidden)
             .add_system(set_focus_when_clicked)
             .add_system(update_text_node)
@@ -50,7 +43,11 @@ struct InputTextDisplayCaret;
 pub struct InputTextFocused(pub Option<Entity>);
 
 impl Widget for InputText {
-    fn build(commands: &mut Commands, asset_server: &AssetServer) -> Entity {
+    fn build(
+        name: impl Into<Cow<'static, str>>,
+        commands: &mut Commands,
+        asset_server: &AssetServer,
+    ) -> Entity {
         let input_panel = NodeBundle {
             style: Style {
                 size: Size::new(Val::Percent(100.0), Val::Px(20.0)),
@@ -58,7 +55,7 @@ impl Widget for InputText {
                 ..default()
             },
             focus_policy: FocusPolicy::Pass,
-            color: Color::rgba(0.0, 0.0, 0.0, 0.9).into(),
+            color: Color::rgba(0.5, 0.5, 0.5, 0.1).into(),
             ..default()
         };
 
@@ -96,7 +93,7 @@ impl Widget for InputText {
             .spawn_bundle(NodeBundle {
                 style: Style {
                     size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
-                    padding: UiRect::new(Val::Px(4.0), Val::Px(4.0), Val::Px(8.0), Val::Px(8.0)),
+                    padding: UiRect::new(Val::Px(2.0), Val::Px(2.0), Val::Px(8.0), Val::Px(8.0)),
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::FlexStart,
                     ..default()
@@ -112,6 +109,7 @@ impl Widget for InputText {
         commands
             .spawn_bundle(input_panel)
             .add_child(panel_bg)
+            .insert(Name::new(name))
             .insert(Interaction::default())
             .insert(InputText::default())
             .insert(InputTextMeta {
@@ -182,7 +180,8 @@ fn update_text_modifiers(
         if let Ok(mut input_text) = q.get_mut(e) {
             for keycode in input_keycode.get_just_released() {
                 if keycode == &KeyCode::Return || keycode == &KeyCode::NumpadEnter {
-                    let value = input_text.text.take();
+                    let value = input_text.text.clone();
+                    input_text.text.clear();
                     info!("Input value: {}", value);
                 } else if keycode == &KeyCode::Back {
                     input_text.text.pop();
