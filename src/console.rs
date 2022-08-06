@@ -6,8 +6,14 @@ pub(super) struct ConsolePlugin;
 
 impl Plugin for ConsolePlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Console>();
+        app.register_type::<Console>().add_system(apply_command);
     }
+}
+
+#[derive(Component)]
+struct ConsoleMeta {
+    command_text: Entity,
+    log_items: Entity,
 }
 
 #[derive(Component, Reflect, Default)]
@@ -45,7 +51,7 @@ impl Widget for Console {
             ..default()
         };
 
-        let input_text = InputText::build("command_text", commands, asset_server);
+        let command_text = InputText::build("command_text", commands, asset_server);
         let log_items = ItemList::build("log_items", commands, asset_server);
 
         commands
@@ -53,11 +59,40 @@ impl Widget for Console {
             .with_children(|parent| {
                 parent
                     .spawn_bundle(panel)
-                    .add_child(input_text)
+                    .add_child(command_text)
                     .add_child(log_items);
             })
-            .insert(Console::default())
             .insert(Name::new(name))
+            .insert(Console::default())
+            .insert(ConsoleMeta {
+                command_text,
+                log_items,
+            })
             .id()
+    }
+}
+
+fn apply_command(
+    input: Res<Input<KeyCode>>,
+    q: Query<&ConsoleMeta>,
+    mut q_input_text: Query<&mut InputText>,
+    mut q_item_list: Query<&mut ItemList>,
+) {
+    if input.just_pressed(KeyCode::Return) == false {
+        return;
+    }
+
+    for meta in &q {
+        let mut input_text = q_input_text
+            .get_mut(meta.command_text)
+            .expect("Every console should have an input text");
+
+        let cmd = input_text.take();
+
+        let mut item_list = q_item_list
+            .get_mut(meta.log_items)
+            .expect("Every console should have an item list");
+
+        item_list.items.push(cmd);
     }
 }

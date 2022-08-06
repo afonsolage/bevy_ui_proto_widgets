@@ -25,6 +25,12 @@ pub struct InputText {
     text: String,
 }
 
+impl InputText {
+    pub fn take(&mut self) -> String {
+        std::mem::take(&mut self.text)
+    }
+}
+
 #[derive(Component)]
 struct InputTextMeta {
     text_entity: Entity,
@@ -179,11 +185,7 @@ fn update_text_modifiers(
     if let Some(e) = focused.0 {
         if let Ok(mut input_text) = q.get_mut(e) {
             for keycode in input_keycode.get_just_released() {
-                if keycode == &KeyCode::Return || keycode == &KeyCode::NumpadEnter {
-                    let value = input_text.text.clone();
-                    input_text.text.clear();
-                    info!("Input value: {}", value);
-                } else if keycode == &KeyCode::Back {
+                if keycode == &KeyCode::Back {
                     input_text.text.pop();
                 }
             }

@@ -1,6 +1,6 @@
 use bevy::{prelude::*, ui::FocusPolicy};
 use bevy_inspector_egui::WorldInspectorPlugin;
-use console::Console;
+use console::{Console, ConsolePlugin};
 use input_text::InputTextPlugin;
 use item_list::ItemListPlugin;
 use widget::Widget;
@@ -26,6 +26,7 @@ fn main() {
         .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(ItemListPlugin)
         .add_plugin(InputTextPlugin)
+        .add_plugin(ConsolePlugin)
         .add_startup_system(setup);
 
     app.run();

@@ -2,13 +2,16 @@ use bevy::{prelude::*, ui::FocusPolicy};
 
 use crate::widget::Widget;
 
+const ITEM_HEIGHT: f32 = 20.0;
+
 pub(super) struct ItemListPlugin;
 
 impl Plugin for ItemListPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<ItemList>()
             .register_type::<ItemIndex>()
-            .add_system(update_item_list_items);
+            .add_system(update_item_list_items)
+            .add_system(update_item_list_max_visible_items);
     }
 }
 
@@ -16,6 +19,7 @@ impl Plugin for ItemListPlugin {
 struct ItemListMeta {
     container_entity: Entity,
     item_font: Handle<Font>,
+    max_visible_items: usize,
 }
 
 impl ItemListMeta {
@@ -29,7 +33,8 @@ impl ItemListMeta {
             },
         )
         .with_style(Style {
-            size: Size::new(Val::Percent(100.0), Val::Px(20.0)),
+            flex_shrink: 0.0,
+            size: Size::new(Val::Percent(100.0), Val::Px(ITEM_HEIGHT)),
             ..default()
         })
     }
@@ -42,8 +47,11 @@ struct ItemIndex(usize);
 #[derive(Component, Default, Reflect)]
 #[reflect(Component)]
 pub struct ItemList {
-    items: Vec<String>,
+    pub items: Vec<String>,
 }
+
+#[derive(Component)]
+struct ItemListContainer;
 
 impl Widget for ItemList {
     fn build(
@@ -57,12 +65,14 @@ impl Widget for ItemList {
                     size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
                     border: UiRect::all(Val::Px(5.0)),
                     flex_direction: FlexDirection::Column,
+                    flex_shrink: 0.0,
                     ..default()
                 },
                 focus_policy: FocusPolicy::Pass,
                 color: Color::rgba(0.1, 0.1, 0.1, 0.9).into(),
                 ..default()
             })
+            .insert(ItemListContainer)
             .id();
 
         commands
@@ -83,6 +93,7 @@ impl Widget for ItemList {
             .insert(ItemListMeta {
                 container_entity: list_bg,
                 item_font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                max_visible_items: 0,
             })
             .id()
     }
@@ -90,37 +101,55 @@ impl Widget for ItemList {
 
 fn update_item_list_items(
     mut commands: Commands,
-    q: Query<(&Children, &ItemList, &ItemListMeta), (With<ItemListMeta>, Changed<ItemList>)>,
+    q: Query<(&ItemList, &ItemListMeta), (With<ItemListMeta>, Changed<ItemList>)>,
+    q_containers: Query<&Children, With<ItemListContainer>>,
     mut q_items: Query<(Entity, &mut Text), With<ItemIndex>>,
 ) {
-    for (children, item_list, meta) in &q {
+    for (item_list, meta) in &q {
+        let children = q_containers.get(meta.container_entity).ok();
+
         // Sync children with item list items
-        for (index, item) in item_list.items.iter().enumerate() {
-            let item_entity = if index <= children.len() {
+        for (index, item) in item_list.items.iter().rev().enumerate() {
+            if index >= meta.max_visible_items {
+                break;
+            }
+
+            let item_entity = if let Some(children) = children && index < children.len() {
                 let (entity, mut text) = q_items
                     .get_mut(children[index])
                     .expect("Child item should exists");
                 text.sections[0].value = item.clone();
                 entity
             } else {
-                commands
+                let item = commands
                     .spawn_bundle(meta.create_item_bundle(item.clone()))
-                    .id()
+                    .id();
+                commands.entity(meta.container_entity).add_child(item);
+                item
             };
 
             commands
                 .entity(item_entity)
                 .insert(ItemIndex(index))
                 .insert(Name::new(format!("Item {index}")));
-
-            commands
-                .entity(meta.container_entity)
-                .add_child(item_entity);
         }
 
         // Remove unused children
-        for i in (item_list.items.len() - 1)..children.len() {
-            commands.entity(children[i]).despawn();
+        if let Some(children) = children {
+            for i in (item_list.items.len() - 1)..children.len() {
+                commands.entity(children[i]).despawn();
+            }
+        }
+    }
+}
+
+fn update_item_list_max_visible_items(
+    mut q: Query<&mut ItemListMeta, (With<ItemList>, Changed<Node>)>,
+    q_containers: Query<&Node, With<ItemListContainer>>,
+) {
+    for mut meta in &mut q {
+        if let Ok(container_node) = q_containers.get(meta.container_entity) {
+            meta.max_visible_items = (container_node.size.y / ITEM_HEIGHT) as usize;
         }
     }
 }
