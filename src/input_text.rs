@@ -1,11 +1,8 @@
 use std::{borrow::Cow, time::Duration};
 
+use crate::widget::Widget;
 use bevy::{prelude::*, ui::FocusPolicy};
-
-use crate::{
-    focus::{ActiveFocus, Focus},
-    widget::Widget,
-};
+use bevy_ui_navigation::prelude::{FocusState, Focusable, Focused};
 
 #[derive(SystemLabel)]
 struct RemoveFocus;
@@ -16,6 +13,7 @@ impl Plugin for InputTextPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<InputText>()
             .add_system(remove_focus_when_hidden.label(RemoveFocus))
+            .add_system(add_focus_when_shown.after(RemoveFocus))
             .add_system(hide_caret_when_lose_focus.after(RemoveFocus))
             .add_system(update_text_section)
             .add_system(update_text_backspace)
@@ -62,7 +60,7 @@ impl Widget for InputText {
                 border: UiRect::all(Val::Px(2.0)),
                 ..default()
             },
-            focus_policy: FocusPolicy::Pass,
+            focus_policy: FocusPolicy::Block,
             color: Color::rgba(0.5, 0.5, 0.5, 0.1).into(),
             ..default()
         };
@@ -118,8 +116,6 @@ impl Widget for InputText {
             .spawn_bundle(input_panel)
             .add_child(panel_bg)
             .insert(Name::new(name))
-            .insert(Focus::default())
-            .insert(Interaction::default())
             .insert(InputText::default())
             .insert(InputTextMeta {
                 text_entity: input_text,
@@ -132,23 +128,49 @@ impl Widget for InputText {
 }
 
 fn remove_focus_when_hidden(
-    q: Query<(&ComputedVisibility, &Focus), (With<InputText>, Changed<ComputedVisibility>)>,
-    mut active_focus: ResMut<ActiveFocus>,
+    mut commands: Commands,
+    q: Query<
+        (Entity, &ComputedVisibility),
+        (
+            With<InputText>,
+            Changed<ComputedVisibility>,
+            With<Focusable>,
+        ),
+    >,
 ) {
-    for (visibility, focus) in &q {
-        if visibility.is_visible() == false && focus.is_focused() {
-            active_focus.clear();
+    for (e, visibility) in &q {
+        if visibility.is_visible() == false {
+            commands.entity(e).remove::<Focusable>();
+            commands.entity(e).remove::<Focused>();
+        }
+    }
+}
+
+fn add_focus_when_shown(
+    mut commands: Commands,
+    q: Query<
+        (Entity, &ComputedVisibility),
+        (
+            With<InputText>,
+            Changed<ComputedVisibility>,
+            Without<Focusable>,
+        ),
+    >,
+) {
+    for (e, visibility) in &q {
+        if visibility.is_visible() == true {
+            commands.entity(e).insert(Focusable::default());
         }
     }
 }
 
 fn hide_caret_when_lose_focus(
-    mut q: Query<(&InputTextMeta, &Focus), (With<InputText>, Changed<Focus>)>,
+    mut q: Query<(&InputTextMeta, &Focusable), (With<InputText>, Changed<Focusable>)>,
     mut q_caret: Query<&mut Style, With<InputTextDisplayCaret>>,
 ) {
     for (meta, focus) in &mut q {
         if let Ok(mut style) = q_caret.get_mut(meta.caret_entity) {
-            if focus.is_focused() == false && &style.display == &Display::Flex {
+            if focus.state() == FocusState::Focused && &style.display == &Display::Flex {
                 style.display = Display::None;
             }
         }
@@ -169,11 +191,11 @@ fn update_text_section(
 }
 
 fn update_text_characters(
-    mut q: Query<(&Focus, &mut InputText)>,
+    mut q: Query<(&Focusable, &mut InputText)>,
     mut events: EventReader<ReceivedCharacter>,
 ) {
     for (focus, mut input_text) in &mut q {
-        if focus.is_focused() {
+        if focus.state() == FocusState::Focused {
             for evt in events.iter() {
                 input_text.text.push(evt.char);
             }
@@ -182,13 +204,13 @@ fn update_text_characters(
 }
 
 fn update_text_backspace(
-    mut q: Query<(&Focus, &mut InputText)>,
+    mut q: Query<(&Focusable, &mut InputText)>,
     input_keycode: Res<Input<KeyCode>>,
     mut timer: Local<Timer>,
     time: Res<Time>,
 ) {
     for (focus, mut input_text) in &mut q {
-        if focus.is_focused() {
+        if focus.state() == FocusState::Focused {
             timer.tick(time.delta());
 
             let backspace = if input_keycode.pressed(KeyCode::Back) && timer.finished() {
@@ -209,12 +231,12 @@ fn update_text_backspace(
 }
 
 fn update_text_caret(
-    mut q: Query<(&Focus, &mut InputTextMeta), With<InputText>>,
+    mut q: Query<(&Focusable, &mut InputTextMeta), With<InputText>>,
     mut q_caret: Query<&mut Style, With<InputTextDisplayCaret>>,
     time: Res<Time>,
 ) {
     for (focus, mut meta) in &mut q {
-        if focus.is_focused() {
+        if focus.state() == FocusState::Focused {
             meta.caret_timer.tick(time.delta());
 
             if meta.caret_timer.just_finished() {

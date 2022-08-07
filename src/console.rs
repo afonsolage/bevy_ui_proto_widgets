@@ -1,6 +1,7 @@
 use bevy::{prelude::*, ui::FocusPolicy};
+use bevy_ui_navigation::prelude::NavRequest;
 
-use crate::{focus::ActiveFocus, input_text::InputText, item_list::ItemList, widget::Widget};
+use crate::{input_text::InputText, item_list::ItemList, widget::Widget};
 
 const CONSOLE_HEIGHT_PERC: f32 = 80.0;
 const CONSOLE_ANIMATION_SPEED: f32 = 250.0;
@@ -79,7 +80,9 @@ impl Widget for Console {
 }
 
 fn toggle_console(mut meta: ResMut<ConsoleMeta>, input: Res<Input<KeyCode>>) {
-    if input.just_pressed(KeyCode::Grave) && input.pressed(KeyCode::LControl) {
+    if input.any_just_pressed([KeyCode::Grave, KeyCode::Apostrophe])
+        && input.pressed(KeyCode::LControl)
+    {
         if meta.visible && meta.direction == 0 {
             meta.direction = -1;
         } else if meta.visible == false && meta.direction == 0 {
@@ -115,7 +118,7 @@ fn console_animation(
     mut q: Query<(&mut Style, &mut Visibility), With<Console>>,
     time: Res<Time>,
     mut meta: ResMut<ConsoleMeta>,
-    mut active_focus: ResMut<ActiveFocus>,
+    mut writer: EventWriter<NavRequest>,
 ) {
     if let Ok((mut style, mut visibility)) = q.get_mut(meta.entity) {
         if meta.direction == 0 {
@@ -133,7 +136,7 @@ fn console_animation(
                 meta.direction = 0;
                 meta.visible = true;
 
-                active_focus.set(meta.command_text);
+                writer.send(NavRequest::FocusOn(meta.command_text));
             } else if meta.direction == -1 && top <= -CONSOLE_HEIGHT_PERC {
                 style.position.top = Val::Percent(-CONSOLE_HEIGHT_PERC);
                 meta.direction = 0;

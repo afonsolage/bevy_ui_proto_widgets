@@ -1,6 +1,7 @@
 use bevy::{prelude::*, ui::FocusPolicy};
+use bevy_ui_navigation::prelude::Focusable;
 
-use crate::{focus::Focus, widget::Widget};
+use crate::widget::Widget;
 
 const NORMAL_COLOR: Color = Color::NONE;
 const HOVERED_COLOR: Color = Color::rgba(0.8, 0.8, 0.8, 0.3);
@@ -111,7 +112,7 @@ impl Widget for Button {
                 ..default()
             })
             .insert(Name::new(name))
-            .insert(Focus::default())
+            .insert(Focusable::default())
             .insert(Interaction::default())
             .insert(Button)
             .insert(ButtonMeta { mask })
