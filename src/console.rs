@@ -1,10 +1,6 @@
 use bevy::{prelude::*, ui::FocusPolicy};
 
-use crate::{
-    input_text::{InputText, InputTextFocused},
-    item_list::ItemList,
-    widget::Widget,
-};
+use crate::{focus::ActiveFocus, input_text::InputText, item_list::ItemList, widget::Widget};
 
 const CONSOLE_HEIGHT_PERC: f32 = 80.0;
 const CONSOLE_ANIMATION_SPEED: f32 = 250.0;
@@ -47,12 +43,13 @@ impl Widget for Console {
                     Val::Percent(-CONSOLE_HEIGHT_PERC),
                     Val::Undefined,
                 ),
+                position_type: PositionType::Absolute,
                 align_self: AlignSelf::FlexEnd,
                 border: UiRect::all(Val::Px(2.0)),
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
-            focus_policy: FocusPolicy::Pass,
+            focus_policy: FocusPolicy::Block,
             color: Color::rgba(0.1, 0.1, 0.1, 0.9).into(),
             ..default()
         };
@@ -81,18 +78,12 @@ impl Widget for Console {
     }
 }
 
-fn toggle_console(
-    mut meta: ResMut<ConsoleMeta>,
-    input: Res<Input<KeyCode>>,
-    mut focus_input: ResMut<InputTextFocused>,
-) {
+fn toggle_console(mut meta: ResMut<ConsoleMeta>, input: Res<Input<KeyCode>>) {
     if input.just_pressed(KeyCode::Grave) && input.pressed(KeyCode::LControl) {
         if meta.visible && meta.direction == 0 {
             meta.direction = -1;
         } else if meta.visible == false && meta.direction == 0 {
             meta.direction = 1;
-            info!("Focusing!!!!");
-            focus_input.0 = Some(meta.command_text);
         }
     }
 }
@@ -124,6 +115,7 @@ fn console_animation(
     mut q: Query<(&mut Style, &mut Visibility), With<Console>>,
     time: Res<Time>,
     mut meta: ResMut<ConsoleMeta>,
+    mut active_focus: ResMut<ActiveFocus>,
 ) {
     if let Ok((mut style, mut visibility)) = q.get_mut(meta.entity) {
         if meta.direction == 0 {
@@ -140,6 +132,8 @@ fn console_animation(
                 style.position.top = Val::Percent(0.0);
                 meta.direction = 0;
                 meta.visible = true;
+
+                active_focus.set(meta.command_text);
             } else if meta.direction == -1 && top <= -CONSOLE_HEIGHT_PERC {
                 style.position.top = Val::Percent(-CONSOLE_HEIGHT_PERC);
                 meta.direction = 0;
