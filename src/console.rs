@@ -1,7 +1,11 @@
 use bevy::{prelude::*, ui::FocusPolicy};
 use bevy_ui_navigation::prelude::NavRequest;
 
-use crate::{input_text::InputText, item_list::ItemList, widget::Widget};
+use crate::{
+    input_text::InputText,
+    item_list::ItemList,
+    widget::{ToStringLabel, Widget, WidgetLabel},
+};
 
 const CONSOLE_HEIGHT_PERC: f32 = 80.0;
 const CONSOLE_ANIMATION_SPEED: f32 = 250.0;
@@ -11,8 +15,10 @@ pub(super) struct ConsolePlugin;
 impl Plugin for ConsolePlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Console>()
+            .add_event::<ConsoleAction>()
             .add_system(apply_command)
             .add_system(console_animation)
+            .add_system(process_actions)
             .add_system(toggle_console);
     }
 }
@@ -25,13 +31,27 @@ struct ConsoleMeta {
     visible: bool,
 }
 
+impl ConsoleMeta {
+    fn toggle_visibility(&mut self) {
+        if self.visible && self.direction == 0 {
+            self.direction = -1;
+        } else if self.visible == false && self.direction == 0 {
+            self.direction = 1;
+        }
+    }
+}
+
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
 pub struct Console;
 
+pub enum ConsoleAction {
+    Toggle,
+}
+
 impl Widget for Console {
-    fn build(
-        name: impl Into<std::borrow::Cow<'static, str>>,
+    fn build<L: WidgetLabel>(
+        label: L,
         commands: &mut Commands,
         asset_server: &AssetServer,
     ) -> Entity {
@@ -55,14 +75,15 @@ impl Widget for Console {
             ..default()
         };
 
-        let command_text = InputText::build("command_text", commands, asset_server);
-        let log_items = ItemList::build("log_items", commands, asset_server);
+        let command_text = InputText::build("command_text".label(), commands, asset_server);
+        let log_items = ItemList::build("log_items".label(), commands, asset_server);
 
         let entity = commands
             .spawn_bundle(panel)
             .add_child(command_text)
             .add_child(log_items)
-            .insert(Name::new(name))
+            .insert(Name::new(label.name()))
+            .insert(label)
             .insert(Console::default())
             .insert(Visibility { is_visible: false })
             .id();
@@ -83,11 +104,7 @@ fn toggle_console(mut meta: ResMut<ConsoleMeta>, input: Res<Input<KeyCode>>) {
     if input.any_just_pressed([KeyCode::Grave, KeyCode::Apostrophe])
         && input.pressed(KeyCode::LControl)
     {
-        if meta.visible && meta.direction == 0 {
-            meta.direction = -1;
-        } else if meta.visible == false && meta.direction == 0 {
-            meta.direction = 1;
-        }
+        meta.toggle_visibility();
     }
 }
 
@@ -150,6 +167,14 @@ fn console_animation(
             } else if visibility.is_visible == false && top > -CONSOLE_HEIGHT_PERC {
                 visibility.is_visible = true;
             }
+        }
+    }
+}
+
+fn process_actions(mut reader: EventReader<ConsoleAction>, mut meta: ResMut<ConsoleMeta>) {
+    for action in reader.iter() {
+        match action {
+            ConsoleAction::Toggle => meta.toggle_visibility(),
         }
     }
 }

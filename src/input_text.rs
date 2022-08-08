@@ -1,6 +1,6 @@
-use std::{borrow::Cow, time::Duration};
+use std::time::Duration;
 
-use crate::widget::Widget;
+use crate::widget::{Widget, WidgetLabel};
 use bevy::{prelude::*, ui::FocusPolicy};
 use bevy_ui_navigation::prelude::{FocusState, Focusable, NavRequest};
 
@@ -48,8 +48,8 @@ struct InputTextDisplayText;
 struct InputTextDisplayCaret;
 
 impl Widget for InputText {
-    fn build(
-        name: impl Into<Cow<'static, str>>,
+    fn build<L: WidgetLabel>(
+        label: L,
         commands: &mut Commands,
         asset_server: &AssetServer,
     ) -> Entity {
@@ -115,7 +115,8 @@ impl Widget for InputText {
         commands
             .spawn_bundle(input_panel)
             .add_child(panel_bg)
-            .insert(Name::new(name))
+            .insert(Name::new(label.name()))
+            .insert(label)
             .insert(Focusable::new().blocked())
             .insert(InputText::default())
             .insert(InputTextMeta {

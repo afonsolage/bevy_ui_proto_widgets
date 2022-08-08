@@ -1,7 +1,7 @@
 use bevy::{prelude::*, ui::FocusPolicy};
 use bevy_ui_navigation::prelude::Focusable;
 
-use crate::widget::Widget;
+use crate::widget::{Widget, WidgetEvent, WidgetLabel};
 
 const NORMAL_COLOR: Color = Color::NONE;
 const HOVERED_COLOR: Color = Color::rgba(0.8, 0.8, 0.8, 0.3);
@@ -11,7 +11,18 @@ pub(super) struct ButtonPlugin;
 
 impl Plugin for ButtonPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Button>().add_system(update_color);
+        app.register_type::<Button>()
+            .add_event::<ButtonClicked>()
+            .add_system(dispatch_events)
+            .add_system(update_color);
+    }
+}
+
+pub struct ButtonClicked(pub Entity);
+
+impl WidgetEvent for ButtonClicked {
+    fn entity(&self) -> Entity {
+        self.0
     }
 }
 
@@ -27,14 +38,14 @@ struct ButtonMeta {
 }
 
 impl Widget for Button {
-    fn build(
-        name: impl Into<std::borrow::Cow<'static, str>>,
+    fn build<L: WidgetLabel>(
+        label: L,
         commands: &mut Commands,
         asset_server: &AssetServer,
     ) -> Entity {
         let text = commands
             .spawn_bundle(TextBundle::from_section(
-                "Button",
+                label.name(),
                 TextStyle {
                     font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                     font_size: 15.0,
@@ -111,7 +122,8 @@ impl Widget for Button {
                 },
                 ..default()
             })
-            .insert(Name::new(name))
+            .insert(Name::new(label.name()))
+            .insert(label)
             .insert(Focusable::default())
             .insert(Interaction::default())
             .insert(Button)
@@ -133,6 +145,18 @@ fn update_color(
                 Interaction::Hovered => HOVERED_COLOR,
                 Interaction::None => NORMAL_COLOR,
             };
+        }
+    }
+}
+
+fn dispatch_events(
+    q: Query<(Entity, &Interaction), (With<Button>, Changed<Interaction>)>,
+    mut writer: EventWriter<ButtonClicked>,
+) {
+    for (e, interaction) in &q {
+        match interaction {
+            Interaction::Clicked => writer.send(ButtonClicked(e)),
+            _ => continue,
         }
     }
 }

@@ -1,6 +1,6 @@
 use bevy::{prelude::*, ui::FocusPolicy};
 
-use crate::widget::Widget;
+use crate::widget::{Widget, WidgetLabel};
 
 const ITEM_HEIGHT: f32 = 20.0;
 
@@ -54,8 +54,8 @@ pub struct ItemList {
 struct ItemListContainer;
 
 impl Widget for ItemList {
-    fn build(
-        name: impl Into<std::borrow::Cow<'static, str>>,
+    fn build<L: WidgetLabel>(
+        label: L,
         commands: &mut Commands,
         asset_server: &AssetServer,
     ) -> Entity {
@@ -88,7 +88,8 @@ impl Widget for ItemList {
                 ..default()
             })
             .add_child(list_bg)
-            .insert(Name::new(name))
+            .insert(Name::new(label.name()))
+            .insert(label)
             .insert(ItemList::default())
             .insert(ItemListMeta {
                 container_entity: list_bg,
