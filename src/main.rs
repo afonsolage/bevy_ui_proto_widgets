@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::WorldInspectorPlugin;
-use button::ButtonClicked;
+use button::{ButtonClicked, ClickButton};
 use console::{Console, ConsoleAction};
 use widget::{StringLabel, ToStringLabel, Widget, WidgetEventReader, WidgetLabel, WidgetPlugin};
 
@@ -45,10 +45,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Camera
     commands.spawn_bundle(Camera2dBundle::default());
 
-    button::Button::build(ToggleLabel, &mut commands, &asset_server);
-    button::Button::build("Skip 1".label(), &mut commands, &asset_server);
-    button::Button::build("Skip 2".label(), &mut commands, &asset_server);
-    button::Button::build("Skip 3".label(), &mut commands, &asset_server);
+    ClickButton::build(ToggleLabel, &mut commands, &asset_server);
+    ClickButton::build("Skip 1".label(), &mut commands, &asset_server);
+    ClickButton::build("Skip 2".label(), &mut commands, &asset_server);
+    ClickButton::build("Skip 3".label(), &mut commands, &asset_server);
     Console::build("Console".label(), &mut commands, &asset_server);
 }
 

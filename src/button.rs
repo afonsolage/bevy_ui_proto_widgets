@@ -11,7 +11,7 @@ pub(super) struct ButtonPlugin;
 
 impl Plugin for ButtonPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Button>()
+        app.register_type::<ClickButton>()
             .add_event::<ButtonClicked>()
             .add_system(dispatch_events)
             .add_system(update_color);
@@ -27,7 +27,7 @@ impl WidgetEvent for ButtonClicked {
 }
 
 #[derive(Component, Reflect, Default)]
-pub struct Button;
+pub struct ClickButton;
 
 #[derive(Component)]
 struct ButtonMask;
@@ -37,7 +37,7 @@ struct ButtonMeta {
     mask: Entity,
 }
 
-impl Widget for Button {
+impl Widget for ClickButton {
     fn build<L: WidgetLabel>(
         label: L,
         commands: &mut Commands,
@@ -126,7 +126,7 @@ impl Widget for Button {
             .insert(label)
             .insert(Focusable::default())
             .insert(Interaction::default())
-            .insert(Button)
+            .insert(ClickButton)
             .insert(ButtonMeta { mask })
             .add_child(border)
             .add_child(mask)
@@ -150,7 +150,7 @@ fn update_color(
 }
 
 fn dispatch_events(
-    q: Query<(Entity, &Interaction), (With<Button>, Changed<Interaction>)>,
+    q: Query<(Entity, &Interaction), (With<ClickButton>, Changed<Interaction>)>,
     mut writer: EventWriter<ButtonClicked>,
 ) {
     for (e, interaction) in &q {
