@@ -2,7 +2,7 @@ use std::{borrow::Cow, time::Duration};
 
 use crate::widget::Widget;
 use bevy::{prelude::*, ui::FocusPolicy};
-use bevy_ui_navigation::prelude::{FocusState, Focusable, Focused};
+use bevy_ui_navigation::prelude::{FocusState, Focusable, NavRequest};
 
 #[derive(SystemLabel)]
 struct RemoveFocus;
@@ -12,8 +12,7 @@ pub(super) struct InputTextPlugin;
 impl Plugin for InputTextPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<InputText>()
-            .add_system(remove_focus_when_hidden.label(RemoveFocus))
-            .add_system(add_focus_when_shown.after(RemoveFocus))
+            .add_system(toggle_focus_visibility.label(RemoveFocus))
             .add_system(hide_caret_when_lose_focus.after(RemoveFocus))
             .add_system(update_text_section)
             .add_system(update_text_backspace)
@@ -92,6 +91,7 @@ impl Widget for InputText {
                     ..default()
                 }),
             )
+            .insert(Focusable::default())
             .insert(InputTextDisplayCaret)
             .id();
 
@@ -116,6 +116,7 @@ impl Widget for InputText {
             .spawn_bundle(input_panel)
             .add_child(panel_bg)
             .insert(Name::new(name))
+            .insert(Focusable::new().blocked())
             .insert(InputText::default())
             .insert(InputTextMeta {
                 text_entity: input_text,
@@ -127,39 +128,21 @@ impl Widget for InputText {
     }
 }
 
-fn remove_focus_when_hidden(
-    mut commands: Commands,
-    q: Query<
-        (Entity, &ComputedVisibility),
-        (
-            With<InputText>,
-            Changed<ComputedVisibility>,
-            With<Focusable>,
-        ),
+fn toggle_focus_visibility(
+    mut q: Query<
+        (&mut Focusable, &ComputedVisibility, &InputTextMeta),
+        (With<InputText>, Changed<ComputedVisibility>),
     >,
+    mut writer: EventWriter<NavRequest>,
 ) {
-    for (e, visibility) in &q {
-        if visibility.is_visible() == false {
-            commands.entity(e).remove::<Focusable>();
-            commands.entity(e).remove::<Focused>();
-        }
-    }
-}
-
-fn add_focus_when_shown(
-    mut commands: Commands,
-    q: Query<
-        (Entity, &ComputedVisibility),
-        (
-            With<InputText>,
-            Changed<ComputedVisibility>,
-            Without<Focusable>,
-        ),
-    >,
-) {
-    for (e, visibility) in &q {
-        if visibility.is_visible() == true {
-            commands.entity(e).insert(Focusable::default());
+    for (mut focus, visibility, meta) in &mut q {
+        if visibility.is_visible() == false && focus.state() != FocusState::Blocked {
+            if focus.block() == false {
+                // TODO: Change it later on when it's possible to remove focus.
+                writer.send(NavRequest::FocusOn(meta.caret_entity));
+            }
+        } else if visibility.is_visible() && focus.state() == FocusState::Blocked {
+            focus.unblock();
         }
     }
 }
@@ -170,7 +153,7 @@ fn hide_caret_when_lose_focus(
 ) {
     for (meta, focus) in &mut q {
         if let Ok(mut style) = q_caret.get_mut(meta.caret_entity) {
-            if focus.state() == FocusState::Focused && &style.display == &Display::Flex {
+            if focus.state() != FocusState::Focused && &style.display == &Display::Flex {
                 style.display = Display::None;
             }
         }

@@ -50,7 +50,7 @@ impl Widget for Console {
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
-            focus_policy: FocusPolicy::Block,
+            focus_policy: FocusPolicy::Pass,
             color: Color::rgba(0.1, 0.1, 0.1, 0.9).into(),
             ..default()
         };

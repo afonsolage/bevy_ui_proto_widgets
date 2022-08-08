@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::WorldInspectorPlugin;
-use bevy_ui_navigation::{prelude::Focusable, DefaultNavigationPlugins};
+use bevy_ui_navigation::DefaultNavigationPlugins;
 use button::ButtonPlugin;
 use console::{Console, ConsolePlugin};
 use input_text::InputTextPlugin;
