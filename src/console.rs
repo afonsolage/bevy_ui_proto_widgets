@@ -4,7 +4,7 @@ use bevy_ui_navigation::prelude::NavRequest;
 use crate::{
     input_text::InputText,
     item_list::ItemList,
-    widget::{ToStringLabel, Widget, WidgetLabel},
+    widget::{Widget, WidgetEvent, WidgetLabel},
 };
 
 const CONSOLE_HEIGHT_PERC: f32 = 80.0;
@@ -16,6 +16,7 @@ impl Plugin for ConsolePlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Console>()
             .add_event::<ConsoleAction>()
+            .add_event::<CommandIssued>()
             .add_system(apply_command)
             .add_system(console_animation)
             .add_system(process_actions)
@@ -49,6 +50,28 @@ pub enum ConsoleAction {
     Toggle,
 }
 
+pub struct CommandIssued(pub Entity, pub String);
+
+impl WidgetEvent for CommandIssued {
+    fn entity(&self) -> Entity {
+        self.0
+    }
+}
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+pub struct CommandTextLabel;
+
+// TODO: Convert this into derive later on
+impl WidgetLabel for CommandTextLabel {}
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+pub struct LogListLabel;
+
+// TODO: Convert this into derive later on
+impl WidgetLabel for LogListLabel {}
+
 impl Widget for Console {
     fn build<L: WidgetLabel>(
         label: L,
@@ -75,8 +98,8 @@ impl Widget for Console {
             ..default()
         };
 
-        let command_text = InputText::build("command_text".label(), commands, asset_server);
-        let log_items = ItemList::build("log_items".label(), commands, asset_server);
+        let command_text = InputText::build(CommandTextLabel, commands, asset_server);
+        let log_items = ItemList::build(LogListLabel, commands, asset_server);
 
         let entity = commands
             .spawn_bundle(panel)
@@ -113,8 +136,9 @@ fn apply_command(
     meta: Res<ConsoleMeta>,
     mut q_input_text: Query<&mut InputText>,
     mut q_item_list: Query<&mut ItemList>,
+    mut writer: EventWriter<CommandIssued>,
 ) {
-    if input.just_pressed(KeyCode::Return) == false {
+    if input.any_just_pressed([KeyCode::Return, KeyCode::NumpadEnter]) == false {
         return;
     }
 
@@ -128,7 +152,9 @@ fn apply_command(
         .get_mut(meta.log_items)
         .expect("Every console should have an item list");
 
-    item_list.items.push(cmd);
+    item_list.items.push(cmd.clone());
+
+    writer.send(CommandIssued(meta.entity, cmd))
 }
 
 fn console_animation(

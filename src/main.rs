@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::WorldInspectorPlugin;
-use button::{ButtonClicked, ClickButton};
-use console::{Console, ConsoleAction};
-use widget::{StringLabel, ToStringLabel, Widget, WidgetEventReader, WidgetLabel, WidgetPlugin};
+use button::{ButtonClicked, TextButton};
+use console::{CommandIssued, Console, ConsoleAction};
+use widget::{Widget, WidgetEventReader, WidgetLabel, WidgetPlugin};
 
 mod button;
 mod console;
@@ -28,7 +28,7 @@ fn main() {
         .add_plugin(WorldInspectorPlugin::new())
         // .add_plugin(FocusPlugin)
         .add_system(process_toggle_console_btn)
-        .add_system(process_string_label_btn)
+        .add_system(process_console_cmd)
         .add_startup_system(setup);
 
     app.run();
@@ -36,24 +36,27 @@ fn main() {
 
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
-struct ToggleLabel;
+struct ToggleButton;
 
 // TODO: Convert this into derive later on
-impl WidgetLabel for ToggleLabel {}
+impl WidgetLabel for ToggleButton {}
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+struct LogConsole;
+// TODO: Convert this into derive later on
+impl WidgetLabel for LogConsole {}
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Camera
     commands.spawn_bundle(Camera2dBundle::default());
 
-    ClickButton::build(ToggleLabel, &mut commands, &asset_server);
-    ClickButton::build("Skip 1".label(), &mut commands, &asset_server);
-    ClickButton::build("Skip 2".label(), &mut commands, &asset_server);
-    ClickButton::build("Skip 3".label(), &mut commands, &asset_server);
-    Console::build("Console".label(), &mut commands, &asset_server);
+    TextButton::build(ToggleButton, &mut commands, &asset_server);
+    Console::build(LogConsole, &mut commands, &asset_server);
 }
 
 fn process_toggle_console_btn(
-    mut reader: WidgetEventReader<ToggleLabel, ButtonClicked>,
+    mut reader: WidgetEventReader<ToggleButton, ButtonClicked>,
     mut writer: EventWriter<ConsoleAction>,
 ) {
     for _evt in reader.iter() {
@@ -61,11 +64,12 @@ fn process_toggle_console_btn(
     }
 }
 
-fn process_string_label_btn(
-    mut reader: WidgetEventReader<StringLabel, ButtonClicked>,
-    mut writer: EventWriter<ConsoleAction>,
-) {
-    for _evt in reader.filter("Skip 1") {
-        writer.send(ConsoleAction::Toggle);
+fn process_console_cmd(mut reader: WidgetEventReader<LogConsole, CommandIssued>) {
+    for CommandIssued {
+        0: _entity,
+        1: cmd,
+    } in reader.iter()
+    {
+        info!("Received console cmd: {}", cmd);
     }
 }

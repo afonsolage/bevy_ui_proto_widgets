@@ -103,6 +103,7 @@ impl<'w, 's, T: WidgetLabel, E: WidgetEvent> WidgetEventReader<'w, 's, T, E> {
     }
 }
 
+#[allow(dead_code)]
 impl<'w, 's, E: WidgetEvent> WidgetEventReader<'w, 's, StringLabel, E> {
     pub fn filter(&mut self, event: &str) -> impl Iterator<Item = &E> {
         self.reader
